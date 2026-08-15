@@ -1,0 +1,166 @@
+animations {
+    // ---- Magic Lamp 关闭动画 ----
+    // 窗口先移动到屏幕底部中点，再以精灵瓶形式被吸入
+    //   WIN_WIN_OFFSET_Y : 窗口底部到屏幕底部的距离(窗口高度单位)
+    //                       小窗口需要设大，最大化/全屏设 0
+    window-close {
+        duration-ms 650
+        curve "ease-out-cubic"
+        custom-shader r"
+        #define SUCTION_X         0.5
+        #define CORNER_RATIO      0.12
+        #define WIN_WIN_OFFSET_Y  0.0
+        #define PI                3.14159265359
+
+        float genie_curve(float d) {
+            float neck = pow(d, 2.5);
+            float body = pow(d, 0.35);
+            return mix(neck, body, smoothstep(0.0, 0.35, d));
+        }
+
+        vec4 close_color(vec3 coords_geo, vec3 size_geo) {
+            float p = niri_clamped_progress;
+            float gx = coords_geo.x;
+            float gy = coords_geo.y;
+
+            float eased = p * p * (3.0 - 2.0 * p);
+
+            // 关闭前期：窗口沿 y 方向滑向屏幕底部 (gy 增大)
+            float slide = smoothstep(0.0, 0.4, p);
+            float offset_y = WIN_WIN_OFFSET_Y * slide;
+
+            float along = 1.0 - gy - offset_y;
+            float across = gx;
+
+            float scale = 1.0 + WIN_WIN_OFFSET_Y * slide - eased;
+
+            if (along > scale || along < 0.0 || scale < 0.001) {
+                return vec4(0.0);
+            }
+
+            float dist_along = along / max(scale, 0.0001);
+            float clamped_dist = clamp(dist_along, 0.0, 1.0);
+
+            float genie = genie_curve(clamped_dist);
+            float width = mix(1.0, genie, eased) * scale;
+
+            float half_w = width * 0.5;
+            if (abs(across - SUCTION_X) > half_w) {
+                return vec4(0.0);
+            }
+
+            float r = CORNER_RATIO * scale;
+            if (r > 0.0) {
+                float top_gy = 1.0 + offset_y - scale;
+                float top_half_w = scale * 0.5;
+                float dx_l = (SUCTION_X - top_half_w) - gx;
+                float dy_l = top_gy - gy;
+                if (dx_l > 0.0 && dy_l > 0.0 && dx_l * dx_l + dy_l * dy_l > r * r) {
+                    return vec4(0.0);
+                }
+                float dx_r = gx - (SUCTION_X + top_half_w);
+                float dy_r = top_gy - gy;
+                if (dx_r > 0.0 && dy_r > 0.0 && dx_r * dx_r + dy_r * dy_r > r * r) {
+                    return vec4(0.0);
+                }
+            }
+
+            float s_along = clamped_dist;
+            float s_across = (across - SUCTION_X) / max(width, 0.0001) + 0.5;
+
+            float wave1 = sin(clamped_dist * PI * 2.5 - p * PI * 3.0) * eased * 0.14;
+            float wave2 = sin(clamped_dist * PI * 5.0 + p * PI * 2.0) * eased * 0.05;
+            s_across += wave1 + wave2;
+            if (s_across < 0.0 || s_across > 1.0) {
+                return vec4(0.0);
+            }
+
+            vec3 new_coords_geo = vec3(s_across, 1.0 - s_along, 1.0);
+            vec3 coords_tex = niri_geo_to_tex * new_coords_geo;
+            return texture2D(niri_tex, coords_tex.st);
+        }
+        "
+    }
+
+    // ---- Magic Lamp 打开动画 ----
+    // 窗口从屏幕底部中点弹出，精灵瓶形展开
+    window-open {
+        duration-ms 650
+        curve "ease-out-cubic"
+        custom-shader r"
+        #define SUCTION_X         0.5
+        #define CORNER_RATIO      0.12
+        #define WIN_WIN_OFFSET_Y  0.0
+        #define PI                3.14159265359
+
+        float genie_curve(float d) {
+            float neck = pow(d, 2.5);
+            float body = pow(d, 0.35);
+            return mix(neck, body, smoothstep(0.0, 0.35, d));
+        }
+
+        vec4 open_color(vec3 coords_geo, vec3 size_geo) {
+            float p = niri_clamped_progress;
+            float gx = coords_geo.x;
+            float gy = coords_geo.y;
+
+            float eased = p * p * (3.0 - 2.0 * p);
+
+            // 打开后期：窗口从屏幕底部滑回原位 (gy 减小)
+            float slide = smoothstep(0.6, 1.0, p);
+            float offset_y = WIN_WIN_OFFSET_Y * (1.0 - slide);
+
+            float along = 1.0 - gy - offset_y;
+            float across = gx;
+
+            float scale = eased + WIN_WIN_OFFSET_Y * (1.0 - slide);
+
+            if (along > scale || along < 0.0 || scale < 0.001) {
+                return vec4(0.0);
+            }
+
+            float dist_along = along / max(scale, 0.0001);
+            float clamped_dist = clamp(dist_along, 0.0, 1.0);
+
+            float genie = genie_curve(clamped_dist);
+            float morph = 1.0 - eased;
+            float width = mix(1.0, genie, morph) * scale;
+
+            float half_w = width * 0.5;
+            if (abs(across - SUCTION_X) > half_w) {
+                return vec4(0.0);
+            }
+
+            float r = CORNER_RATIO * scale;
+            if (r > 0.0) {
+                float top_gy = 1.0 + offset_y - scale;
+                float top_half_w = scale * 0.5;
+                float dx_l = (SUCTION_X - top_half_w) - gx;
+                float dy_l = top_gy - gy;
+                if (dx_l > 0.0 && dy_l > 0.0 && dx_l * dx_l + dy_l * dy_l > r * r) {
+                    return vec4(0.0);
+                }
+                float dx_r = gx - (SUCTION_X + top_half_w);
+                float dy_r = top_gy - gy;
+                if (dx_r > 0.0 && dy_r > 0.0 && dx_r * dx_r + dy_r * dy_r > r * r) {
+                    return vec4(0.0);
+                }
+            }
+
+            float s_along = clamped_dist;
+            float s_across = (across - SUCTION_X) / max(width, 0.0001) + 0.5;
+
+            float wave1 = sin(clamped_dist * PI * 2.5 - p * PI * 3.0) * (1.0 - p) * 0.12;
+            float wave2 = sin(clamped_dist * PI * 5.0 + p * PI * 2.0) * (1.0 - p) * 0.04;
+            s_across += wave1 + wave2;
+            if (s_across < 0.0 || s_across > 1.0) {
+                return vec4(0.0);
+            }
+
+            vec3 new_coords_geo = vec3(s_across, 1.0 - s_along, 1.0);
+            vec3 coords_tex = niri_geo_to_tex * new_coords_geo;
+            return texture2D(niri_tex, coords_tex.st);
+        }
+        "
+    }
+}
