@@ -1,0 +1,1 @@
+# niri-withstar-animations-open-and-close-windows
